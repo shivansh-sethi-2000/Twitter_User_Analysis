@@ -94,19 +94,20 @@ if st.button('Load Authors Data'):
 
     
 
-    for idx in usernames:
-        followers_filepath = './datasets/'+idx+'_followers'
-        following_filepath = './datasets/'+idx+'_following'
-        followers = []
-        followings = []
-        if not exists(followers_filepath+'.csv'):
-            followers = fnc.get_followers(idx)
-            fnc.get_user_info(filename=followers_filepath, user_ids=followers, user_field=['created_at','protected','verified', 'public_metrics'])
+    with st.spinner('Getting Authors Connections...'):
+        for idx in usernames:
+            followers_filepath = './datasets/'+idx+'_followers'
+            following_filepath = './datasets/'+idx+'_following'
+            followers = []
+            followings = []
+            if not exists(followers_filepath+'.csv'):
+                followers = fnc.get_followers(idx)
+                fnc.get_user_info(filename=followers_filepath, user_ids=followers, user_field=['created_at','protected','verified', 'public_metrics'])
 
-        if not exists(following_filepath+'.csv'):
-            followings =fnc.get_following(idx)
-            fnc.get_user_info(filename=following_filepath, user_ids=followings, user_field=['created_at','protected','verified', 'public_metrics'])
-        
+            if not exists(following_filepath+'.csv'):
+                followings =fnc.get_following(idx)
+                fnc.get_user_info(filename=following_filepath, user_ids=followings, user_field=['created_at','protected','verified', 'public_metrics'])
+    st.success('Done!!')
         
 
     for idx in usernames:
@@ -343,33 +344,35 @@ if st.button('Timelines Analysis'):
         st.pyplot(fig)
 
     if len(usernames) > 1:
-        similar_tweets = {'pair of authors ids' : [] , 'tweet 1' : [], 'tweet 2' : [] , 'similarity value' : []}
-        nlp = spacy.load("en_core_web_lg")
-        ids = dataX_text.tweet_id.values
-        corpus = dataX_text.text.values
-        logging.set_verbosity(logging.ERROR)
-        text_embeddings = fnc.get_embeding(corpus)
-        for i in range(len(ids)):
-            for j in range(i+1,len(ids)):
-                sim = cosine_similarity(np.array(text_embeddings[i]).reshape(1,-1), np.array(text_embeddings[j]).reshape(1,-1))
-                if sim > 0.7 and dataX_text[dataX_text.tweet_id == ids[i]]['author_id'].values[0] != dataX_text[dataX_text.tweet_id == ids[j]]['author_id'].values[0]:
-                    author_idxs = []
-                    author_idxs.append(dataX_text[dataX_text.tweet_id == ids[i]]['author_id'].values[0])
-                    author_idxs.append(dataX_text[dataX_text.tweet_id == ids[j]]['author_id'].values[0])
-                    author_idxs.sort()
-                    for i in range(len(author_idxs)):
-                        author_idxs[i] = authors[authors.id == author_idxs[i]]['username'].values[0]
-                    author_idxs = tuple(author_idxs)
-                    similar_tweets['pair of authors ids'].append(author_idxs)
-                    similar_tweets['tweet 1'].append(dataX_text[dataX_text.tweet_id == ids[i]]['text'].values[0])
-                    similar_tweets['tweet 2'].append(dataX_text[dataX_text.tweet_id == ids[j]]['text'].values[0])
-                    similar_tweets['similarity value'].append(sim)
+        with st.spinner('Getting Authors Similar Tweets...'):
+            similar_tweets = {'pair of authors ids' : [] , 'tweet 1' : [], 'tweet 2' : [] , 'similarity value' : []}
+            nlp = spacy.load("en_core_web_lg")
+            ids = dataX_text.tweet_id.values
+            corpus = dataX_text.text.values
+            logging.set_verbosity(logging.ERROR)
+            text_embeddings = fnc.get_embeding(corpus)
+            for i in range(len(ids)):
+                for j in range(i+1,len(ids)):
+                    sim = cosine_similarity(np.array(text_embeddings[i]).reshape(1,-1), np.array(text_embeddings[j]).reshape(1,-1))
+                    if sim > 0.7 and dataX_text[dataX_text.tweet_id == ids[i]]['author_id'].values[0] != dataX_text[dataX_text.tweet_id == ids[j]]['author_id'].values[0]:
+                        author_idxs = []
+                        author_idxs.append(dataX_text[dataX_text.tweet_id == ids[i]]['author_id'].values[0])
+                        author_idxs.append(dataX_text[dataX_text.tweet_id == ids[j]]['author_id'].values[0])
+                        author_idxs.sort()
+                        for i in range(len(author_idxs)):
+                            author_idxs[i] = authors[authors.id == author_idxs[i]]['username'].values[0]
+                        author_idxs = tuple(author_idxs)
+                        similar_tweets['pair of authors ids'].append(author_idxs)
+                        similar_tweets['tweet 1'].append(dataX_text[dataX_text.tweet_id == ids[i]]['text'].values[0])
+                        similar_tweets['tweet 2'].append(dataX_text[dataX_text.tweet_id == ids[j]]['text'].values[0])
+                        similar_tweets['similarity value'].append(sim)
 
-        if len(similar_tweets) > 1:
-            similar_Tweets_df = pd.DataFrame.from_dict(similar_tweets)
-            st.download_button(
-                label="Download Similar Tweets as CSV",
-                data=convert_df(similar_Tweets_df),
-                file_name='authors_similarities.csv',
-                mime='text/csv',
-            )
+            if len(similar_tweets) > 1:
+                similar_Tweets_df = pd.DataFrame.from_dict(similar_tweets)
+                st.download_button(
+                    label="Download Similar Tweets as CSV",
+                    data=convert_df(similar_Tweets_df),
+                    file_name='authors_similarities.csv',
+                    mime='text/csv',
+                )
+        st.success('Done!!')
