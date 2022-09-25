@@ -144,31 +144,31 @@ if st.button('Load Authors Data'):
         following[idx] = id_following
 
     for idx in usernames:
-        for node in following[idx].following_username:
+        for node,username in zip(following[idx].following_id, following[idx].following_username):
             lst = []
             for idx2 in usernames:
-                if node in followers[idx2].follower_username:
+                if node in followers[idx2].follower_id:
                     lst.append(idx2)
-                elif node in following[idx2].following_username:
+                elif node in following[idx2].following_id:
                     lst.append(idx2)
             if len(lst) > 1:
                 if not G.has_node(str(node)):
-                    G.add_node(str(node),color='blue', title=str(node))
+                        G.add_node(str(node),color='blue', title=username)
                 for source in lst:
-                    G.add_edge(source, str(node))
+                    G.add_edge(str(source), str(node))
 
-        for node in followers[idx].follower_username:
+        for node,username in zip(followers[idx].follower_id, followers[idx].follower_username):
             lst = []
             for idx2 in usernames:
-                if node in followers[idx2].follower_username:
+                if node in followers[idx2].follower_id:
                     lst.append(idx2)
-                elif node in following[idx2].following_username:
+                elif node in following[idx2].following_id:
                     lst.append(idx2)
             if len(lst) > 1:
                 if not G.has_node(str(node)):
-                    G.add_node(str(node),color='blue', title=str(node))
+                        G.add_node(str(node),color='blue', title=username)
                 for source in lst:
-                    G.add_edge(source, str(node))
+                    G.add_edge(str(source), str(node))
 
     st.header('Common Connections of Users')
     net = Network("1000px", "2000px",notebook=True, font_color='#10000000')
@@ -344,7 +344,7 @@ if st.button('Timelines Analysis'):
         st.pyplot(fig)
 
     if len(usernames) > 1:
-        with st.spinner('Getting Authors Similar Tweets...'):
+        with st.spinner('Getting Authors Data...'):
             similar_tweets = {'pair of authors ids' : [] , 'tweet 1' : [], 'tweet 2' : [] , 'similarity value' : []}
             nlp = spacy.load("en_core_web_lg")
             ids = dataX_text.tweet_id.values
@@ -366,13 +366,12 @@ if st.button('Timelines Analysis'):
                         similar_tweets['tweet 1'].append(dataX_text[dataX_text.tweet_id == ids[i]]['text'].values[0])
                         similar_tweets['tweet 2'].append(dataX_text[dataX_text.tweet_id == ids[j]]['text'].values[0])
                         similar_tweets['similarity value'].append(sim)
-
-            if len(similar_tweets) > 1:
-                similar_Tweets_df = pd.DataFrame.from_dict(similar_tweets)
-                st.download_button(
-                    label="Download Similar Tweets as CSV",
-                    data=convert_df(similar_Tweets_df),
-                    file_name='authors_similarities.csv',
-                    mime='text/csv',
-                )
         st.success('Done!!')
+        if len(similar_tweets) > 1:
+            similar_Tweets_df = pd.DataFrame.from_dict(similar_tweets)
+            st.download_button(
+                label="Download Similar Tweets as CSV",
+                data=convert_df(similar_Tweets_df),
+                file_name='authors_similarities.csv',
+                mime='text/csv',
+            )
