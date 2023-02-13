@@ -7,19 +7,15 @@ import regex as re
 import tweepy
 import numpy as np
 from nltk.tokenize import TweetTokenizer
-from transformers import AutoTokenizer, AutoModel, AutoConfig
-from transformers import AutoModelForSequenceClassification
 from transformers import pipeline
-from torch.utils.data import DataLoader
 import numpy as np
-import boto3
 import tensorflow_hub as hub
-from scipy.special import softmax
 import warnings
+from twitterUsernameviaUserID import getHandles as gH
+import snscrape.modules.twitter as sntwitter
 warnings.filterwarnings('ignore')
 import cv2 
-import pickle
-import matplotlib.pyplot as plt
+import time
 
 
 auth = tweepy.OAuthHandler(my_tokens.API_KEY, my_tokens.API_SECRET)
@@ -42,6 +38,8 @@ def get_embeding(input):
 
 def get_Tweets(filename, query, tweet_field=None, user_field = None, start_date=None, end_date=None):
     
+    columns = ['id', 'author_id', 'source', 'created_at', 'text', 'lang', 'ex_links', 'mentions', 'hashtags']
+    start = time.time()
     print(start_date, end_date)
     tweets = tweepy.Paginator(
         client.search_all_tweets, 
@@ -53,6 +51,8 @@ def get_Tweets(filename, query, tweet_field=None, user_field = None, start_date=
         expansions=['author_id','entities.mentions.username'],
         tweet_fields=tweet_field).flatten()
 
+    print("got tweets time taken :- " + str(time.time() - start))
+    start = time.time()
     tweets_for_csv = []
     for tweet in tweets:
         all_mentions = []
@@ -73,35 +73,52 @@ def get_Tweets(filename, query, tweet_field=None, user_field = None, start_date=
     print("writing to " + outfile)
     with open(outfile, 'w+', encoding='utf-8') as file: 
         writer = csv.writer(file, delimiter=',')
+        writer.writerow(columns)
         writer.writerows(tweets_for_csv)
+    print('time taken to write create dataset search :- '+ str(time.time() - start))
+
+
+def get_username_from_id(user_ids):
+    usernames = []
+    users = client.get_users(ids=user_ids, user_fields=None)
+    for user in users.data:
+        usernames.append(user.username)
+    
+    return usernames
+
 
 def get_user_info(filename, user_names=None, user_ids=None,user_field=None):
 
     index = 0
     users_for_csv = []
+    columns = ['id','created_at', 'name', 'username', 'verified', 'protected', 'followers', 'following', 'tweets_count', 'description', 'profile_image_url']
     if user_names:
         while index < len(user_names):
             uids = user_names[index : min(index+100, len(user_names))]
             users = client.get_users(usernames=uids, user_fields=user_field)
             for user in users.data:
-                users_for_csv.append([user.id, user.created_at ,user.name, user.username, user.verified, user.protected, user.public_metrics['followers_count'], user.public_metrics['following_count'], user.public_metrics['tweet_count']])
+                users_for_csv.append([user.id, user.created_at ,user.name, user.username, user.verified, user.protected, user.public_metrics['followers_count'], user.public_metrics['following_count'], user.public_metrics['tweet_count'], user.description, user.profile_image_url])
             index += 100
-    elif user_ids:
+    index = 0
+    if user_ids:
          while index < len(user_ids):
             uids = user_ids[index : min(index+100, len(user_ids))]
             users = client.get_users(ids=uids, user_fields=user_field)
             for user in users.data:
-                users_for_csv.append([user.id, user.created_at ,user.name, user.username, user.verified, user.protected, user.public_metrics['followers_count'], user.public_metrics['following_count'], user.public_metrics['tweet_count']])
+                users_for_csv.append([user.id, user.created_at ,user.name, user.username, user.verified, user.protected, user.public_metrics['followers_count'], user.public_metrics['following_count'], user.public_metrics['tweet_count'], user.description])
             index += 100
 
     outfile = filename + ".csv"
     print("writing to " + outfile)
     with open(outfile, 'w+', encoding='utf-8') as file:
         writer = csv.writer(file, delimiter=',')
+        writer.writerow(columns)
         writer.writerows(users_for_csv)
 
-def get_timeline(filename, ids, end_date=None, tweet_field=None, lim=200):
+def get_timeline(filename, ids, start_date=None, end_date=None, tweet_field=None, lim=200):
 
+    columns = ['author_id', 'tweet_id','source', 'tweet_time', 'text', 'lang', 'likes', 'retwets']
+    start = time.time()
     user_timeline = []
     for idx in ids:
         tweets = tweepy.Paginator(
@@ -111,8 +128,11 @@ def get_timeline(filename, ids, end_date=None, tweet_field=None, lim=200):
             tweet_fields=tweet_field,
             expansions=['referenced_tweets.id'],
             exclude=['retweets'],
+            start_time=start_date,
             end_time = end_date).flatten(limit=lim)
         # for t in tweets:
+        print('got timeline time taken :- '+str(time.time() - start))
+        start = time.time()
         for tweet in tweets:
             user_timeline.append([idx, tweet.id, tweet.source, tweet.created_at, tweet.text, tweet.lang,tweet.public_metrics['like_count'], tweet.public_metrics['retweet_count']])
             
@@ -120,44 +140,9 @@ def get_timeline(filename, ids, end_date=None, tweet_field=None, lim=200):
     print("writing to " + outfile)
     with open(outfile, 'w+', encoding='utf-8') as file:
         writer = csv.writer(file, delimiter=',')
+        writer.writerow(columns)
         writer.writerows(user_timeline)
-
-
-def tweet_lookup(df, ids,media_fields=None, tweet_fields=None, user_fields=None, expansions=None):
-    column_links = []
-    column_type = []
-    index = 0
-    while index < len(ids):
-        idx = ids[index : min(index+100, len(ids))]
-        tweets = client.get_tweets(ids=idx,media_fields=media_fields, user_fields=user_fields, tweet_fields=tweet_fields, expansions=expansions)
-        ridx = []
-        # print(len(idx), len(tweets.data))
-        for tweet in tweets.data:
-            ridx.append(tweet.id)
-            row_url = []
-            row_type = []
-            if tweets.includes and tweet.attachments:
-                if 'media' in tweets.includes and 'media_keys' in tweet.attachments:
-                    for media in tweets.includes['media']:
-                        if media.media_key in tweet.attachments['media_keys']:
-                            row_url.append(media.url)
-                            row_type.append(media.type)
-            column_links.append(row_url)
-            column_type.append(row_type)
-        
-        # print(idx)
-        # print(ridx)
-        # print()
-        for i in range(len(idx)):
-            if ridx[i] != idx[i]:
-                column_links.insert(-1,i)
-                column_type.insert(-1,i)
-                ridx.insert(i,idx[i])
-        index += 100
-            
-    df['media_link'] = column_links
-    df['media_type'] = column_type
-    return df
+    print("dataset ready of timelines time taken :- "+str(time.time() - start))
 
 def get_count(lst, word):
     cnt = 0
@@ -172,6 +157,7 @@ def get_f_ratio(data, followers, following):
     return data
 
 def clean_text(text):
+    text = text.lower()
     text = re.sub(r'https?:\/\/\S+', '', text)
     text = re.sub(r"www\.[a-z]?\.?(com)+|[a-z]+\.(com)", '', text)
     return text
@@ -189,8 +175,8 @@ def lemmatize(text):
     text = " ".join(text)
     return text
 
-def get_translate(text, source):
-    translation = GoogleTranslator(source=source, target='en').translate(text=text)
+def get_translate(text, source=None):
+    translation = GoogleTranslator(target='en').translate(text=text)
     return translation
 
 def get_ppm_count(lst):
@@ -264,34 +250,46 @@ def calculateResultsFor(imageA,imageB):
     img2 = imageResizeTrain(img2)
     keypoint1 , descriptor1 = computeSIFT(img1)
     keypoint2, descriptor2 = computeSIFT(img2)
-    matches = calculateMatches(descriptor1, descriptor2)
-    score = calculateScore(len(matches),len(keypoint1),len(keypoint2))
-    if score < 10 or score == 100:
-        return 
-    fx, ax = plt.subplots(1,2, figsize=(16,10))
-    # plt.figure(figsize=(16,10))
-    plt.title(str(score)+'%'+' Similar')
-    ax[0].imshow(cv2.cvtColor(imageA, cv2.COLOR_BGR2RGB))
-    ax[1].imshow(cv2.cvtColor(imageB, cv2.COLOR_BGR2RGB))
-    plt.show()
+    if descriptor1 is not None and descriptor2 is not None:
+        matches = calculateMatches(descriptor1, descriptor2)
+        score = calculateScore(len(matches),len(keypoint1),len(keypoint2))
+        return score
+    elif descriptor1 is None and descriptor2 is None:
+        return 100
+    else :
+        return 0
+    # fx, ax = plt.subplots(1,2, figsize=(16,10))
+    # # plt.figure(figsize=(16,10))
+    # plt.title(str(score)+'%'+' Similar')
+    # ax[0].imshow(cv2.cvtColor(imageA, cv2.COLOR_BGR2RGB))
+    # ax[1].imshow(cv2.cvtColor(imageB, cv2.COLOR_BGR2RGB))
+    # plt.show()
 
 auth = tweepy.OAuth2BearerHandler(my_tokens.BEARER_TOKEN)
 api = tweepy.API(auth)
 
-def get_followers(id):
+def get_followers(id, followers_path):
     rows = []
-    for page in tweepy.Cursor(api.get_follower_ids, screen_name=id,count=5000).pages(1):
-        if len(rows) == 0:
-            rows = page
-        else:
-            rows += page
-    return rows
+    for item in tweepy.Cursor(api.get_follower_ids, screen_name=id,count=5000).items(25000):
+        # user = sntwitter.TwitterUserScraper(user = item)._get_entity()
+        # rows.append([user.username, user.id, user.displayname, user.rawDescription, user.verified, user.created, user.followersCount, user.friendsCount, user.location, user.protected, user.profileImageUrl])
+        rows.append(item)
+    
+    print("writing to " + followers_path)
+    with open(followers_path, 'w+') as f:
+        writer = csv.writer(f)
+        writer.writerow(rows)
 
-def get_following(id):
+def get_following(id, following_path):
+    # columns = ['username', 'userid', 'name', 'description', 'verified', 'created_at', 'followers', 'followings','location' , 'protected', 'profile_image_url']
     rows = []
-    for page in tweepy.Cursor(api.get_friend_ids, screen_name=id,count=5000).pages(1):
-        if len(rows) == 0:
-            rows = page
-        else:
-            rows += page
-    return rows
+    followings = tweepy.Cursor(api.get_friend_ids, screen_name=id,count=5000).items(25000)
+    for item in followings:
+        # user = sntwitter.TwitterUserScraper(user = item)._get_entity()
+        # rows.append([user.username, user.id, user.displayname, user.rawDescription, user.verified, user.created, user.followersCount, user.friendsCount, user.location, user.protected, user.profileImageUrl])
+        rows.append(item)
+    
+    print("writing to " + following_path)
+    with open(following_path, 'w+') as f:
+        writer = csv.writer(f)
+        writer.writerow(rows)
