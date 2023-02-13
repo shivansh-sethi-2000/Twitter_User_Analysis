@@ -1,9 +1,3 @@
-# Project name
-Doppelgänger Finder 
-## Team Members
-- Shivansh Sethi
-- Rohit
-
 ## Tool Description
 
 The tool has a multi-purpose usage. 
@@ -52,7 +46,7 @@ Note: No. of users and no. of tweets to be analysed is a user input and can be a
 
 ### Please follow the steps below to download the app and the code for the tool and start working on our tool:  
 
-1. Fork the Following Repository https://github.com/shivansh-sethi-2000/Doppelganger-Finder-.git
+1. Fork the Following Repository https://github.com/shivansh-sethi-2000/Twitter_User_Analysis.git
 
 2. Download the cardiffnlp and universal-sentence-encoder_4 folders from the link : https://drive.google.com/drive/folders/1mOe2WVAit0AakFINY3k1iaVLoP4ExO8n?usp=sharing and place the cardiffnlp and universal-sentence-encoder_4 folders in the same directory.
 
